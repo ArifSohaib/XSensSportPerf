@@ -46,9 +46,9 @@ for csv_file in files_to_read:
     prev_datetime = file_datetime
     for i in range(len(data["SampleTimeFine"].values)):
         new_datetime = prev_datetime + increment
-        timestamps.append(new_datetime)
+        timestamps.append(new_datetime.time())
         prev_datetime = new_datetime
-    data["timestamps"] = timestamps
+    data.loc[:,"Time"] = timestamps
     print(data.head())
     print(f'final timestamp: {timestamps[-1]}')
 
@@ -58,7 +58,7 @@ for csv_file in files_to_read:
     #path to save file to 
     if not Path.exists(save_dir):
         Path.mkdir(save_dir)
-    save_path = Path(base_path,"updated_data",parent_dir,input_file_path.name)
+    save_path = Path(save_dir,input_file_path.name)
     print(f"saving to {save_path}")
     data.to_csv(str(save_path.absolute()),index=None)
 print(colorama.Style.RESET_ALL)
