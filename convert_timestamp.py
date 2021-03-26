@@ -6,6 +6,7 @@ import colorama
 import pandas as pd
 from pathlib import Path
 from datetime import datetime, timedelta
+import numpy as np
 colorama.init()
 data_paths = [Path("D:\\repos\\XSensProject\\Xsens DOT Data Exporter_2020.2.0_win\\data")]
 base_path = Path("D:\\repos\\XSensProject\\Xsens DOT Data Exporter_2020.2.0_win\\")
@@ -22,11 +23,50 @@ while len(data_paths) != 0:
             print(str(item.absolute()))
             files_to_read.append(str(item.absolute()))
 #%%
+def read_input_files(filename:str)->pd.DataFrame:
+    x = []
+    sep = ''
+    with open(filename) as f:
+        for i, line in enumerate(f):
+            if i == 0:
+                sep = line.rstrip()[-1]
+            if i > 0:
+                x.append(line.rstrip().split(','))
+    x = pd.DataFrame(data=x[1:], columns=x[0])
+    return x
+#%%
+def convert_to_radians(angle:float):
+    return np.radians(angle)
+
+def rotate(vector:np.array,sigma:float, theta:float, psi:float):
+    """
+    vector: input matrix to rotate, must be size 3
+    sigma: angle in radians 
+    theta: angle in radians 
+    psi: angle in radians
+    """
+    sigma = np.radians(sigma)
+    theta = np.radians(theta)
+    psi = np.radians(psi)
+    R_1 = [np.cos(theta)*np.cos(psi), (np.sin(sigma)*np.sin(theta)*np.cos(psi))-(np.cos(sigma)*np.sin(psi)), (np.cos(sigma)*np.sin(theta)*np.cos(psi))-(np.sin(sigma)*np.sin(psi))]
+    R_2 = [np.cos(theta)*np.sin(psi), (np.sin(sigma)*np.sin(theta)*np.sin(psi))-(np.cos(sigma)*np.cos(psi)), (np.cos(sigma)*np.sin(theta)*np.sin(psi))-(np.sin(sigma)*np.cos(psi))]
+    R_3 = [-1*np.sin(theta),np.sin(psi)*np.cos(theta),np.cos(sigma)*np.cos(theta)]
+    R = [R_1,R_2,R_3]
+    if len(vector) == 3:
+        result = vector * R
+        return R, result
+    return R
+
+#%%
 increment = timedelta(microseconds=100000)
 for csv_file in files_to_read:
-    data = pd.read_csv(csv_file,skiprows=1)
+    data = read_input_files(csv_file)#pd.read_csv(csv_file,skiprows=1)
+    data = data.astype({'Euler_X':'float32','Euler_Y':'float32','Euler_Z':'float32',
+                        'Acc_X':'float32','Acc_Y':'float32','Acc_Z':'float32',
+                        'Gyr_X':'float32','Gyr_Y':'float32','Gyr_Z':'float32'})
     print(colorama.Fore.LIGHTGREEN_EX+f"file: {csv_file}")
     print(colorama.Fore.LIGHTCYAN_EX)
+    print(f"columns before update: {data.columns}")
     #print(data.head())
     #get the SampleTimeFine
     #print(data["SampleTimeFine"].values)
@@ -48,9 +88,17 @@ for csv_file in files_to_read:
         new_datetime = prev_datetime + increment
         timestamps.append(new_datetime.time())
         prev_datetime = new_datetime
+    
     data.loc[:,"Time"] = timestamps
-    print(data.head())
+    global_reference_vals = []
+    for i in range(len(data["Acc_X"].values)):
+        vals = np.array([data["Acc_X"].values[i],data["Acc_Y"].values[i],data["Acc_Z"].values[i]])
+        R, global_val = rotate(vals, data["Gyr_X"].values[i],data["Gyr_Y"].values[i],data["Gyr_Z"].values[i])
+        global_val = global_val - np.array([0,0,9.81])
+        global_reference_vals.append(np.mean(global_val))
+    print(f"columns after update: {data.columns}")
     print(f'final timestamp: {timestamps[-1]}')
+    data.loc[:,"global_reference_vals"] = global_reference_vals
 
     input_file_path = Path(csv_file)
     parent_dir = str(input_file_path.parent.absolute()).split("\\")[-1]
@@ -65,3 +113,4 @@ print(colorama.Style.RESET_ALL)
 
 
 # %%
+
