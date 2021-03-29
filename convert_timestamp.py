@@ -38,7 +38,7 @@ def read_input_files(filename:str)->pd.DataFrame:
 def convert_to_radians(angle:float):
     return np.radians(angle)
 
-def rotate(vector:np.array,sigma:float, theta:float, psi:float):
+def rotate(vector:np.array,psi:float, theta:float, sigma:float):
     """
     vector: input matrix to rotate, must be size 3
     sigma: angle in radians 
@@ -51,9 +51,10 @@ def rotate(vector:np.array,sigma:float, theta:float, psi:float):
     R_1 = [np.cos(theta)*np.cos(psi), (np.sin(sigma)*np.sin(theta)*np.cos(psi))-(np.cos(sigma)*np.sin(psi)), (np.cos(sigma)*np.sin(theta)*np.cos(psi))-(np.sin(sigma)*np.sin(psi))]
     R_2 = [np.cos(theta)*np.sin(psi), (np.sin(sigma)*np.sin(theta)*np.sin(psi))-(np.cos(sigma)*np.cos(psi)), (np.cos(sigma)*np.sin(theta)*np.sin(psi))-(np.sin(sigma)*np.cos(psi))]
     R_3 = [-1*np.sin(theta),np.sin(psi)*np.cos(theta),np.cos(sigma)*np.cos(theta)]
-    R = [R_1,R_2,R_3]
+    R = np.array([R_1,R_2,R_3])
+    R = R.T
     if len(vector) == 3:
-        result = vector * R
+        result = np.dot(vector , R)
         return R, result
     return R
 
@@ -61,9 +62,9 @@ def rotate(vector:np.array,sigma:float, theta:float, psi:float):
 increment = timedelta(microseconds=100000)
 for csv_file in files_to_read:
     data = read_input_files(csv_file)#pd.read_csv(csv_file,skiprows=1)
-    data = data.astype({'Euler_X':'float32','Euler_Y':'float32','Euler_Z':'float32',
-                        'Acc_X':'float32','Acc_Y':'float32','Acc_Z':'float32',
-                        'Gyr_X':'float32','Gyr_Y':'float32','Gyr_Z':'float32'})
+    data = data.astype({'Euler_X':'float','Euler_Y':'float','Euler_Z':'float',
+                        'Acc_X':'float','Acc_Y':'float','Acc_Z':'float',
+                        'Gyr_X':'float','Gyr_Y':'float','Gyr_Z':'float'})
     print(colorama.Fore.LIGHTGREEN_EX+f"file: {csv_file}")
     print(colorama.Fore.LIGHTCYAN_EX)
     print(f"columns before update: {data.columns}")
@@ -91,14 +92,32 @@ for csv_file in files_to_read:
     
     data.loc[:,"Time"] = timestamps
     global_reference_vals = []
-    for i in range(len(data["Acc_X"].values)):
+    act_x = []
+    act_y = []
+    act_z = []
+    for i in range(len(data["SampleTimeFine"].values)):
         vals = np.array([data["Acc_X"].values[i],data["Acc_Y"].values[i],data["Acc_Z"].values[i]])
         R, global_val = rotate(vals, data["Gyr_X"].values[i],data["Gyr_Y"].values[i],data["Gyr_Z"].values[i])
-        global_val = global_val - np.array([0,0,9.81])
-        global_reference_vals.append(np.mean(global_val))
+        #print(global_val)
+        # act_x.append(np.mean(global_val[0] -  np.array([0,0,9.81])))
+        # act_y.append(np.mean(global_val[1] -  np.array([0,0,9.81])))
+        # act_z.append(np.mean(global_val[2] -  np.array([0,0,9.81])))
+        
+        global_val = np.array([np.mean(global_val[0]),np.mean(global_val[1]),np.mean(global_val[2])])
+        act_x.append(global_val[0])
+        act_y.append(global_val[1])
+        act_z.append(global_val[2])
+        global_reference_vals.append(np.mean(global_val+np.array([0,0,-9.81])))
+        
     print(f"columns after update: {data.columns}")
     print(f'final timestamp: {timestamps[-1]}')
-    data.loc[:,"global_reference_vals"] = global_reference_vals
+    data.loc[:,"free_acc_x"] = act_x
+    data.loc[:,"free_acc_y"] = act_y
+    data.loc[:,"free_acc_z"] = act_z
+    data.loc[:,"activity"] = global_reference_vals
+    data.loc[:,~data.columns.str.match("Unnamed")]
+    print(data.describe())
+    print(data.head())
 
     input_file_path = Path(csv_file)
     parent_dir = str(input_file_path.parent.absolute()).split("\\")[-1]
