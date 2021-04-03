@@ -1,0 +1,28 @@
+#:kivy 2.0.0
+
+<ActivityGeneratorLayout>
+    GridLayout:
+        cols:1
+        size: root.width, root.height
+        Label:
+            id: msg_lbl
+            text: "Sports Performance Technologies XSens data converter"
+            font_size:30
+            
+        #FileChooserIconView:
+        TextInput:
+            id: xsens_base_path
+            text: "Location of directory where XSens files are extracted"
+            font_size:30
+        TextInput:
+            id: frequency_txt
+            text: "Enter frequency of data collection (default 10 hz)"
+            font_size:30
+
+        Button:
+            text: "Start Processing"
+            id: start_btn  
+            font_size:30
+            on_press: root.get_activity_data()
+            background_color: (150/250,200/250.0,200/250.0,1)
+            background_normal:""
