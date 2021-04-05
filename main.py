@@ -3,7 +3,7 @@ import colorama
 from kivy.app import App
 from kivy.clock import mainthread
 from kivy.uix.widget import Widget
-from kivy.uix.filechooser import FileChooserIconView, FileChooser
+#from kivy.uix.filechooser import FileChooserIconView, FileChooser
 from kivy.properties import ObjectProperty, NumericProperty, StringProperty
 from pathlib import Path
 import json
@@ -19,9 +19,9 @@ class ActivityGeneratorLayout(Widget):
         self.increment = timedelta(microseconds=100000)
         #self.ids.xsens_base_path.text = "D:\\repos\\XSensProject\\Xsens DOT Data Exporter_2020.2.0_win\\"
         self.settings_file = Path("act_gen_settings.txt")
-        self.open_or_reset_settings()
+        self.open_settings()
 
-    def open_or_reset_settings(self):
+    def open_settings(self):
         if Path.exists(self.settings_file):
             with open(Path(self.settings_file),'r') as f:
                 settings = json.load(f)
@@ -32,11 +32,20 @@ class ActivityGeneratorLayout(Widget):
                     self.ids.msg_lbl.text = "invalid settings dir"
         else:
             settings = {}
-            settings["xsens_dir"] = self.xsens_dir
+            settings["xsens_dir"] = self.ids.xsens_base_path.text
+            self.xsens_dir = settings["xsens_dir"]
             settings_json = json.dumps(settings)
             with open(self.settings_file,'w') as f:
                 f.write(settings_json)  
-              
+
+    def reset_settings(self):
+        settings = {}
+        settings["xsens_dir"] = self.ids.xsens_base_path.text
+        self.xsens_dir = settings["xsens_dir"]
+        settings_json = json.dumps(settings)
+        with open(self.settings_file,'w') as f:
+            f.write(settings_json) 
+
     @staticmethod
     def rotate(vector:np.array,psi:float, theta:float, sigma:float):
         """
@@ -73,7 +82,7 @@ class ActivityGeneratorLayout(Widget):
 
     def get_activity_data(self):
         self.ids.msg_lbl.text = "processing" 
-        self.open_or_reset_settings()
+        self.reset_settings()
         self.data_paths = [Path(self.xsens_dir,"data")]
         self.files_to_read = []
         while len(self.data_paths) != 0:
@@ -88,12 +97,17 @@ class ActivityGeneratorLayout(Widget):
                     self.files_to_read.append(str(item.absolute()))
         print(self.files_to_read)
         for csv_file in self.files_to_read:
+            save_path = self.create_dir_if_needed(csv_file)
+            if Path.exists(save_path):
+                print(colorama.Fore.LIGHTGREEN_EX+f"updated data {str(save_path.absolute())} already exists")
+                continue
             data = self.read_input_files(csv_file)#pd.read_csv(csv_file,skiprows=1)
             data = data.astype({'Euler_X':'float32','Euler_Y':'float32','Euler_Z':'float32',
                                 'Acc_X':'float32','Acc_Y':'float32','Acc_Z':'float32',
                                 'Gyr_X':'float32','Gyr_Y':'float32','Gyr_Z':'float32'})
             print(colorama.Fore.LIGHTGREEN_EX+f"file: {csv_file}")
             print(colorama.Fore.LIGHTCYAN_EX)
+            
             print(f"columns before update: {data.columns}")
             time_components = Path(csv_file).name.split("_")
             initial_date = time_components[-2]
@@ -147,18 +161,24 @@ class ActivityGeneratorLayout(Widget):
             
             print(colorama.Fore.LIGHTCYAN_EX+f"{data.describe()}")
             print(data.head())
-            input_file_path = Path(csv_file)
-            parent_dir = str(input_file_path.parent.absolute()).split("\\")[-1]
-            save_dir = Path(self.xsens_dir,"updated_data",parent_dir)
-            #path to save file to 
-            if not Path.exists(save_dir):
-                Path.mkdir(save_dir)
-            save_path = Path(save_dir,input_file_path.name)
+            
             print(f"saving to {save_path}")
             data.to_csv(str(save_path.absolute()),index=None)
         print(colorama.Style.RESET_ALL)
         self.ids.msg_lbl.text = "processing complete"
 
+    def create_dir_if_needed(self,csv_file:Path)->Path:
+        input_file_path = Path(csv_file)
+        parent_dir = str(input_file_path.parent.absolute()).split("\\")[-1]
+        updated_data_dir = Path(self.xsens_dir,"updated_data")
+        if not Path.exists(updated_data_dir):
+            Path.mkdir(updated_data_dir)
+        save_dir = Path(self.xsens_dir,"updated_data",parent_dir)
+        #path to save file to 
+        if not Path.exists(save_dir):
+            Path.mkdir(save_dir)
+        save_path = Path(save_dir,input_file_path.name)
+        return save_path
 class ActivityGeneratorApp(App):
     def build(self):
         return ActivityGeneratorLayout()
